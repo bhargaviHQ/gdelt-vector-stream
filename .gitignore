@@ -1,0 +1,65 @@
+# Environment & Secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Claude Code (local configuration)
+.claude/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# GDELT Data (large files — re-downloadable)
+data/*.csv
+data/*.zip
+data/*.CSV
+!data/sample_gdelt_events.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Runtime
+*.db
+*.sqlite
+*.sqlite3
