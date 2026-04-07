@@ -17,6 +17,7 @@ ENV/
 data/*.csv
 data/*.zip
 data/*.CSV
+data/.processed_files.json
 !data/sample_gdelt_events.csv
 
 # Python
