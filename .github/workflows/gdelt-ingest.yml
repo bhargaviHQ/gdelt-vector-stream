@@ -1,0 +1,86 @@
+name: GDELT Ingest
+
+on:
+  schedule:
+    # Run every 5 hours
+    - cron: "0 */5 * * *"
+  workflow_dispatch:
+    inputs:
+      sample_size:
+        description: "Number of records to sample per GDELT file"
+        required: false
+        default: "100"
+      max_files:
+        description: "Maximum number of new GDELT files to process"
+        required: false
+        default: "3"
+      dry_run:
+        description: "Dry run (fetch & parse but skip Pinecone ingest)"
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  ingest:
+    name: Fetch & Ingest GDELT Data
+    runs-on: ubuntu-latest
+
+    # Only run on the default branch so secrets are available
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    permissions:
+      # Needed to push the processed-files tracker commit back to the repo
+      contents: write
+
+    env:
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
+      EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+      LOG_LEVEL: INFO
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so we can push back processed-file state
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run GDELT ingest
+        id: ingest
+        run: |
+          SAMPLE=${{ github.event.inputs.sample_size || '100' }}
+          MAX_FILES=${{ github.event.inputs.max_files || '3' }}
+          DRY_RUN_FLAG=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          python -m gdelt_vector_stream.downloader \
+            --sample "$SAMPLE" \
+            --max-files "$MAX_FILES" \
+            $DRY_RUN_FLAG
+
+      - name: Commit processed-files state
+        # Only commit when running for real (not a dry run) and when the
+        # tracker file was actually updated.
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          git config user.name "gdelt-stream-bot"
+          git config user.email "gdelt-stream-bot@users.noreply.github.com"
+          if git status --porcelain data/.processed_files.json 2>/dev/null | grep -q .; then
+            git add data/.processed_files.json
+            git commit -m "chore(data): update processed GDELT files tracker [skip ci]"
+            git push
+          else
+            echo "No changes to processed_files tracker — nothing to commit."
+          fi

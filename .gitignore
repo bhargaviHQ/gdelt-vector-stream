@@ -17,8 +17,9 @@ ENV/
 data/*.csv
 data/*.zip
 data/*.CSV
-data/.processed_files.json
 !data/sample_gdelt_events.csv
+# data/.processed_files.json is intentionally tracked so the CI ingest
+# workflow can persist which GDELT files have already been processed.
 
 # Python
 __pycache__/
