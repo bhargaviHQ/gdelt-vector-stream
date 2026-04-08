@@ -1,7 +1,6 @@
 """RAG-powered news analyst: answer questions grounded in GDELT events via a local LLM (Ollama)."""
 
 import argparse
-import json
 import logging
 import os
 import sys

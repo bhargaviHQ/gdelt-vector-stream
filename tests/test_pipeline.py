@@ -41,7 +41,7 @@ def test_embedding():
     assert isinstance(embedding, list), "Embedding should be a list"
     assert len(embedding) == 384, "Sentence-Transformers all-MiniLM should produce 384-dim vectors"
     assert all(isinstance(x, float) for x in embedding), "Embedding values should be floats"
-    print(f"✓ Generated 384-dim embedding")
+    print("✓ Generated 384-dim embedding")
 
 
 def test_pinecone_vectors():
