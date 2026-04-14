@@ -50,7 +50,7 @@ python -m gdelt_vector_stream.downloader --watch
 ### Semantic search
 
 ```bash
-python -m gdelt_vector_stream.query --text "protests in Southeast Asia"
+python -m gdelt_vector_stream.query --text "renewable energy developments worldwide"
 ```
 
 ### RAG analyst
@@ -58,13 +58,13 @@ python -m gdelt_vector_stream.query --text "protests in Southeast Asia"
 Ask natural language questions grounded in your GDELT data:
 
 ```bash
-python -m gdelt_vector_stream.analyst "What conflicts are happening in the Middle East?"
+python -m gdelt_vector_stream.analyst "What are the latest developments in global diplomacy?"
 
 # Show retrieved events alongside the answer
-python -m gdelt_vector_stream.analyst "Trade tensions between US and China" --show-context
+python -m gdelt_vector_stream.analyst "Recent international space exploration news" --show-context
 
 # Use a different model
-python -m gdelt_vector_stream.analyst "Climate events in Europe" --model Qwen/Qwen2.5-7B-Instruct
+python -m gdelt_vector_stream.analyst "Global trends in renewable energy adoption" --model Qwen/Qwen2.5-7B-Instruct
 ```
 
 ### API server
