@@ -3,10 +3,10 @@
 import logging
 import os
 
-import requests as http_requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from huggingface_hub import InferenceClient
 from pydantic import BaseModel
 
 from gdelt_vector_stream.analyst import ask as analyst_ask
@@ -31,10 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 
 # --- Request/Response Models ---
+
+HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
+
 
 class AskRequest(BaseModel):
     question: str
@@ -51,9 +54,9 @@ class IngestRequest(BaseModel):
 
 @app.get("/api/health")
 def health():
-    """Check connectivity to Pinecone and Ollama."""
+    """Check connectivity to Pinecone and Hugging Face Inference API."""
     pinecone_ok = False
-    ollama_ok = False
+    hf_ok = False
 
     try:
         index = get_pinecone_index()
@@ -63,12 +66,14 @@ def health():
         logger.warning(f"Pinecone health check failed: {e}")
 
     try:
-        resp = http_requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=3)
-        ollama_ok = resp.status_code == 200
-    except Exception:
-        pass
+        if HF_TOKEN:
+            client = InferenceClient(token=HF_TOKEN)
+            client.get_model_status(HF_MODEL)
+            hf_ok = True
+    except Exception as e:
+        logger.warning(f"HF Inference health check failed: {e}")
 
-    if pinecone_ok and ollama_ok:
+    if pinecone_ok and hf_ok:
         status = "ok"
     elif pinecone_ok:
         status = "degraded"
@@ -78,8 +83,8 @@ def health():
     return {
         "status": status,
         "pinecone_connected": pinecone_ok,
-        "ollama_available": ollama_ok,
-        "ollama_url": OLLAMA_BASE_URL,
+        "hf_available": hf_ok,
+        "hf_model": HF_MODEL,
     }
 
 
@@ -128,20 +133,12 @@ def ask(req: AskRequest):
     try:
         result = analyst_ask(question=req.question, top_k=req.top_k, model=req.model)
         return result
-    except ConnectionError as e:
-        return {
-            "answer": None,
-            "events": [],
-            "model": req.model or os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
-            "error": "ollama_unavailable",
-            "message": str(e),
-        }
     except RuntimeError as e:
         return {
             "answer": None,
             "events": [],
-            "model": req.model,
-            "error": "model_not_found",
+            "model": req.model or HF_MODEL,
+            "error": "hf_error",
             "message": str(e),
         }
     except Exception as e:

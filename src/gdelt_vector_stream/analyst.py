@@ -1,4 +1,4 @@
-"""RAG-powered news analyst: answer questions grounded in GDELT events via a local LLM (Ollama)."""
+"""RAG-powered news analyst: answer questions grounded in GDELT events via Hugging Face Inference API."""
 
 import argparse
 import logging
@@ -6,8 +6,8 @@ import os
 import sys
 from typing import Any
 
-import requests
 from dotenv import load_dotenv
+from huggingface_hub import InferenceClient
 
 from gdelt_vector_stream.query import semantic_search
 
@@ -15,8 +15,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+HF_TOKEN = os.getenv("HF_TOKEN")
+HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
 
 
 def format_events_as_context(results: list[dict[str, Any]]) -> str:
@@ -65,43 +65,38 @@ Question: {question}
 Answer:"""
 
 
-def call_ollama(prompt: str, model: str = OLLAMA_MODEL) -> str:
+def call_hf_inference(prompt: str, model: str = HF_MODEL) -> str:
     """
-    Call the local Ollama LLM API.
+    Call the Hugging Face Inference API.
 
     Args:
         prompt: Full prompt text
-        model: Ollama model name (e.g., "llama3.2:3b")
+        model: HF model ID (e.g., "mistralai/Mistral-7B-Instruct-v0.3")
 
     Returns:
         Generated response text
 
     Raises:
-        ConnectionError: If Ollama server is not running
+        RuntimeError: If the API call fails
     """
-    url = f"{OLLAMA_BASE_URL}/api/generate"
+    if not HF_TOKEN:
+        raise RuntimeError(
+            "HF_TOKEN not set. Get a free token at https://huggingface.co/settings/tokens "
+            "and add it to your .env file."
+        )
+
+    client = InferenceClient(token=HF_TOKEN)
 
     try:
-        response = requests.post(
-            url,
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=120,
+        response = client.chat_completion(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+            temperature=0.7,
         )
-        response.raise_for_status()
-        return response.json().get("response", "").strip()
-
-    except requests.ConnectionError:
-        raise ConnectionError(
-            f"Cannot connect to Ollama at {OLLAMA_BASE_URL}. "
-            "Make sure Ollama is running: open /Applications/Ollama.app "
-            "or run 'ollama serve'"
-        )
-    except requests.HTTPError as e:
-        if "model" in str(e).lower() or response.status_code == 404:
-            raise RuntimeError(
-                f"Model '{model}' not found. Pull it first: ollama pull {model}"
-            )
-        raise
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        raise RuntimeError(f"HF Inference API error: {e}")
 
 
 def ask(question: str, top_k: int = 5, model: str | None = None) -> dict[str, Any]:
@@ -111,12 +106,12 @@ def ask(question: str, top_k: int = 5, model: str | None = None) -> dict[str, An
     Args:
         question: Natural language question (e.g., "What's happening in Ukraine?")
         top_k: Number of events to retrieve from Pinecone
-        model: Ollama model override (default from env/config)
+        model: HF model override (default from env/config)
 
     Returns:
         Dict with "answer", "events", and "model" keys
     """
-    model = model or OLLAMA_MODEL
+    model = model or HF_MODEL
 
     # Step 1: Retrieve relevant events from Pinecone
     logger.info(f"Searching GDELT index for: {question}")
@@ -135,7 +130,7 @@ def ask(question: str, top_k: int = 5, model: str | None = None) -> dict[str, An
 
     # Step 3: Build prompt and call LLM
     prompt = build_prompt(question, context)
-    answer = call_ollama(prompt, model=model)
+    answer = call_hf_inference(prompt, model=model)
 
     return {
         "answer": answer,
@@ -154,11 +149,11 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(
-        description="Ask questions about global events, answered by a local LLM grounded in GDELT data"
+        description="Ask questions about global events, answered by HF Inference API grounded in GDELT data"
     )
     parser.add_argument("question", nargs="+", help="Your question in natural language")
     parser.add_argument("--top-k", type=int, default=5, help="Number of events to retrieve (default: 5)")
-    parser.add_argument("--model", type=str, default=None, help=f"Ollama model (default: {OLLAMA_MODEL})")
+    parser.add_argument("--model", type=str, default=None, help=f"HF model (default: {HF_MODEL})")
     parser.add_argument("--show-context", action="store_true", help="Show the raw events sent to the LLM")
 
     args = parser.parse_args()
@@ -169,7 +164,7 @@ if __name__ == "__main__":
 
     try:
         result = ask(question, top_k=args.top_k, model=args.model)
-    except (ConnectionError, RuntimeError) as e:
+    except RuntimeError as e:
         print(f"\nError: {e}")
         sys.exit(1)
 
