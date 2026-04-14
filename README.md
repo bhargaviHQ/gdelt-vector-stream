@@ -1,5 +1,7 @@
 # gdelt-vector-stream
 
+[![CI](https://github.com/bhargaviHQ/gdelt-vector-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/bhargaviHQ/gdelt-vector-stream/actions/workflows/ci.yml)
+
 Ingest news events from the [GDELT Project](https://www.gdeltproject.org/), embed them as dense vectors, store them in [Pinecone](https://www.pinecone.io/), and query them with a RAG-powered analyst backed by Hugging Face Inference API.
 
 ## How it works
