@@ -64,3 +64,7 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+
+# UI (React/Vite)
+ui/node_modules/
+ui/dist/
