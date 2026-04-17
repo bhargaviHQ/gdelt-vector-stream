@@ -1,10 +1,6 @@
 """Basic tests for the ingestion pipeline."""
 
-import sys
 from pathlib import Path
-
-# Add src to path so we can import modules
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from gdelt_vector_stream.embedder import create_pinecone_vectors, embed_event, get_embedder
 from gdelt_vector_stream.fetcher import create_event_text, load_gdelt_events

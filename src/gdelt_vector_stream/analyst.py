@@ -15,7 +15,6 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-HF_TOKEN = os.getenv("HF_TOKEN")
 HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
 
 
@@ -50,27 +49,33 @@ def format_events_as_context(results: list[dict[str, Any]]) -> str:
     return "\n\n".join(lines)
 
 
-def build_prompt(question: str, context: str) -> str:
-    """Build the RAG prompt with event context and user question."""
-    return f"""You are a geopolitical news analyst. Answer the user's question using ONLY the GDELT news events provided below. Be concise (3-5 sentences). If the events don't contain enough information, say so honestly.
+def build_messages(question: str, context: str) -> list[dict[str, str]]:
+    """
+    Build the RAG message list with event context and user question.
 
-When referencing events, mention the actors, locations, and dates. End with a "Sources" section listing the relevant source URLs.
+    Using a separate system role keeps the analyst instructions isolated from the
+    user-supplied question, reducing the risk of prompt injection.
+    """
+    system_content = (
+        "You are a geopolitical news analyst. Answer the user's question using ONLY the "
+        "GDELT news events provided. Be concise (3-5 sentences). If the events don't "
+        "contain enough information, say so honestly. When referencing events, mention "
+        "the actors, locations, and dates. End with a 'Sources' section listing the "
+        "relevant source URLs.\n\n"
+        f"--- GDELT NEWS EVENTS ---\n{context}\n--- END EVENTS ---"
+    )
+    return [
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": question},
+    ]
 
---- GDELT NEWS EVENTS ---
-{context}
---- END EVENTS ---
 
-Question: {question}
-
-Answer:"""
-
-
-def call_hf_inference(prompt: str, model: str = HF_MODEL) -> str:
+def call_hf_inference(messages: list[dict[str, str]], model: str = HF_MODEL) -> str:
     """
     Call the Hugging Face Inference API.
 
     Args:
-        prompt: Full prompt text
+        messages: List of chat messages (system + user roles)
         model: HF model ID (e.g., "mistralai/Mistral-7B-Instruct-v0.3")
 
     Returns:
@@ -79,18 +84,19 @@ def call_hf_inference(prompt: str, model: str = HF_MODEL) -> str:
     Raises:
         RuntimeError: If the API call fails
     """
-    if not HF_TOKEN:
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
         raise RuntimeError(
             "HF_TOKEN not set. Get a free token at https://huggingface.co/settings/tokens "
             "and add it to your .env file."
         )
 
-    client = InferenceClient(token=HF_TOKEN)
+    client = InferenceClient(token=hf_token)
 
     try:
         response = client.chat_completion(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=512,
             temperature=0.7,
         )
@@ -128,9 +134,9 @@ def ask(question: str, top_k: int = 5, model: str | None = None) -> dict[str, An
     context = format_events_as_context(results)
     logger.info(f"Retrieved {len(results)} events, sending to {model}...")
 
-    # Step 3: Build prompt and call LLM
-    prompt = build_prompt(question, context)
-    answer = call_hf_inference(prompt, model=model)
+    # Step 3: Build messages and call LLM
+    messages = build_messages(question, context)
+    answer = call_hf_inference(messages, model=model)
 
     return {
         "answer": answer,

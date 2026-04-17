@@ -15,6 +15,30 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+def _extract_matches(results: Any) -> list[Any]:
+    """
+    Extract the matches list from a Pinecone query response.
+
+    Handles both the modern SDK object response (results.matches) and
+    the legacy dict-style response (results["matches"]).
+    """
+    matches = getattr(results, "matches", None)
+    if matches is None:
+        matches = results.get("matches", [])
+    return matches or []
+
+
+def _extract_match_fields(match: Any) -> tuple[str, float, dict[str, Any]]:
+    """
+    Extract id, score, and metadata from a single Pinecone match.
+
+    Handles both object-style (match.id) and dict-style (match["id"]) access.
+    """
+    if hasattr(match, "id"):
+        return match.id, match.score or 0.0, match.metadata or {}
+    return match.get("id", ""), match.get("score", 0.0), match.get("metadata", {})
+
+
 def semantic_search(query_text: str, index_name: str | None = None, top_k: int = 5) -> list[dict[str, Any]]:
     """
     Semantic search over the GDELT events index.
@@ -44,11 +68,12 @@ def semantic_search(query_text: str, index_name: str | None = None, top_k: int =
 
     # Format results
     formatted = []
-    for match in results.get("matches", []):
+    for match in _extract_matches(results):
+        vec_id, score, metadata = _extract_match_fields(match)
         result = {
-            "vector_id": match["id"],
-            "similarity_score": match.get("score", 0),
-            "metadata": match.get("metadata", {}),
+            "vector_id": vec_id,
+            "similarity_score": score,
+            "metadata": metadata,
         }
         formatted.append(result)
         logger.info(

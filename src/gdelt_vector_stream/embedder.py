@@ -1,20 +1,23 @@
 """Embedding generation for GDELT events."""
 
 import logging
+import math
 from typing import Any
 
-import pandas as pd
 from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded model
-_model: SentenceTransformer | None = None
+# Lazy-loaded models, keyed by model name so different model names are cached separately
+_models: dict[str, SentenceTransformer] = {}
 
 
 def get_embedder(model_name: str = "sentence-transformers/all-MiniLM-L6-v2") -> SentenceTransformer:
     """
     Get or initialize the embedding model (lazy loading).
+
+    The model is cached by name, so requesting a different model name returns
+    the correct model rather than reusing the first-loaded one.
 
     Args:
         model_name: Hugging Face model identifier
@@ -22,14 +25,12 @@ def get_embedder(model_name: str = "sentence-transformers/all-MiniLM-L6-v2") -> 
     Returns:
         SentenceTransformer model instance
     """
-    global _model
-
-    if _model is None:
+    if model_name not in _models:
         logger.info(f"Loading embedding model: {model_name}")
-        _model = SentenceTransformer(model_name)
-        logger.info(f"Model loaded. Embedding dimension: {_model.get_sentence_embedding_dimension()}")
+        _models[model_name] = SentenceTransformer(model_name)
+        logger.info(f"Model loaded. Embedding dimension: {_models[model_name].get_sentence_embedding_dimension()}")
 
-    return _model
+    return _models[model_name]
 
 
 def embed_event(event_text: str, embedder: SentenceTransformer) -> list[float]:
@@ -75,7 +76,7 @@ def embed_events_batch(
 
 def _safe_string(value: Any) -> str:
     """Safely convert value to string, handling NaN and None."""
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    if value is None or (isinstance(value, float) and math.isnan(value)):
         return ""
     return str(value).strip()
 
