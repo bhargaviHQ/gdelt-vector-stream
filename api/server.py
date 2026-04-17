@@ -13,6 +13,7 @@ from gdelt_vector_stream.analyst import ask as analyst_ask
 from gdelt_vector_stream.downloader import download_and_ingest, load_processed
 from gdelt_vector_stream.ingestor import get_pinecone_index
 from gdelt_vector_stream.query import semantic_search
+from gdelt_vector_stream.trends import DEFAULT_CATEGORIES, get_trends_digest
 
 load_dotenv()
 
@@ -155,3 +156,31 @@ def ingest(req: IngestRequest):
         return {"summaries": summaries, "files_processed": len(summaries)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
+
+
+@app.get("/api/trends")
+def get_trending_digest(
+    top_k: int = Query(3, ge=1, le=10),
+    categories: list[str] = Query(default=None),
+    model: str = Query(default=None),
+):
+    """Generate a World News Digest across broad topic categories."""
+    try:
+        result = get_trends_digest(
+            categories=categories or DEFAULT_CATEGORIES,
+            top_k=top_k,
+            model=model,
+        )
+        return result
+    except RuntimeError as e:
+        return {
+            "digest": None,
+            "categories": {},
+            "model": model or HF_MODEL,
+            "total_events": 0,
+            "error": "hf_error",
+            "message": str(e),
+        }
+    except Exception:
+        logger.exception("Trends digest failed")
+        raise HTTPException(status_code=500, detail="Trends digest failed. Check server logs.")
