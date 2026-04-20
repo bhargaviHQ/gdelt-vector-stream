@@ -67,6 +67,29 @@ python -m gdelt_vector_stream.analyst "Recent international space exploration ne
 python -m gdelt_vector_stream.analyst "Global trends in renewable energy adoption" --model Qwen/Qwen2.5-7B-Instruct
 ```
 
+### Trending Topics Digest
+
+Automatically surface the top global news themes — no question needed:
+
+```bash
+# Generate a World News Digest across 8 default topic categories
+python -m gdelt_vector_stream.trends
+
+# Show the raw retrieved events alongside the digest
+python -m gdelt_vector_stream.trends --show-events
+
+# Customise which topics are covered
+python -m gdelt_vector_stream.trends --categories "military conflict" "energy crisis" "elections"
+
+# Retrieve more events per category for a richer digest
+python -m gdelt_vector_stream.trends --top-k 5
+
+# Use a different model
+python -m gdelt_vector_stream.trends --model Qwen/Qwen2.5-7B-Instruct
+```
+
+The digest searches 8 broad categories (conflict, diplomacy, protests, economy, environment, health, humanitarian, technology), deduplicates events across them, and asks the LLM for one paragraph per active topic.
+
 ### API server
 
 A FastAPI backend is available for building frontends:
@@ -84,6 +107,7 @@ Endpoints:
 | GET | `/api/search?q=...&top_k=5` | Semantic search |
 | POST | `/api/ask` | RAG analyst (JSON body: `question`, `top_k`, `model`) |
 | POST | `/api/ingest` | Trigger ingestion (JSON body: `sample_size`, `max_files`) |
+| GET | `/api/trends?top_k=3` | World News Digest across default topic categories |
 
 ## Tech stack
 
@@ -118,12 +142,14 @@ src/gdelt_vector_stream/
   query.py         # Semantic search interface
   downloader.py    # Auto-download real GDELT data from master file list
   analyst.py       # RAG analyst: Pinecone retrieval + HF LLM
+  trends.py        # Trending Topics Digest: multi-category world news briefing
   main.py          # Pipeline orchestration (fetch -> embed -> ingest)
 api/
   server.py        # FastAPI backend
 tests/
   test_pipeline.py # Unit tests for the core pipeline
   test_downloader.py
+  test_trends.py   # Unit tests for the Trending Topics Digest
 ```
 
 ## Testing

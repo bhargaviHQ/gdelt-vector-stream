@@ -13,6 +13,7 @@ from gdelt_vector_stream.analyst import ask as analyst_ask
 from gdelt_vector_stream.downloader import download_and_ingest, load_processed
 from gdelt_vector_stream.ingestor import get_pinecone_index
 from gdelt_vector_stream.query import semantic_search
+from gdelt_vector_stream.trends import DEFAULT_CATEGORIES, get_trends_digest
 
 load_dotenv()
 
@@ -153,16 +154,32 @@ def _run_ingest(sample_size: int, max_files: int) -> None:
     try:
         download_and_ingest(sample_size=sample_size, max_files=max_files)
     except Exception as e:
-        logger.error(f"Background ingestion failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
 
 
-@app.post("/api/ingest", status_code=202)
-def ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    """
-    Trigger GDELT data ingestion.
-
-    Ingestion is long-running (download + embed + upsert), so it is executed
-    as a background task. The endpoint returns immediately with HTTP 202 Accepted.
-    """
-    background_tasks.add_task(_run_ingest, req.sample_size, req.max_files)
-    return {"status": "accepted", "message": "Ingestion started in the background"}
+@app.get("/api/trends")
+def get_trending_digest(
+    top_k: int = Query(3, ge=1, le=10),
+    categories: list[str] = Query(default=None),
+    model: str = Query(default=None),
+):
+    """Generate a World News Digest across broad topic categories."""
+    try:
+        result = get_trends_digest(
+            categories=categories or DEFAULT_CATEGORIES,
+            top_k=top_k,
+            model=model,
+        )
+        return result
+    except RuntimeError as e:
+        return {
+            "digest": None,
+            "categories": {},
+            "model": model or HF_MODEL,
+            "total_events": 0,
+            "error": "hf_error",
+            "message": str(e),
+        }
+    except Exception:
+        logger.exception("Trends digest failed")
+        raise HTTPException(status_code=500, detail="Trends digest failed. Check server logs.")
