@@ -92,8 +92,6 @@ def upsert_batch(index, batch: list[tuple[str, list[float], dict[str, Any]]], ba
                 logger.error(f"✗ Batch {batch_num} failed after {MAX_RETRIES + 1} attempts: {e}")
                 return False
 
-    return False
-
 
 def ingest_vectors(
     vectors: list[tuple[str, list[float], dict[str, Any]]], index_name: str | None = None

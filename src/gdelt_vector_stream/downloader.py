@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -27,7 +28,9 @@ logger = logging.getLogger(__name__)
 GDELT_MANIFEST_URL = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
 DEFAULT_SAMPLE_SIZE = 100
 POLL_INTERVAL_SECONDS = 900  # 15 minutes
-PROCESSED_FILE_PATH = Path("data/.processed_files.json")
+# Anchor to the project root (two levels above src/gdelt_vector_stream/) so the path
+# is stable regardless of the working directory when the module is run.
+PROCESSED_FILE_PATH = Path(__file__).resolve().parents[2] / "data" / ".processed_files.json"
 
 # GDELT 2.0 Event export: 61 tab-delimited columns, NO header row.
 # Column names in positional order per GDELT documentation.
@@ -103,17 +106,48 @@ def parse_export_urls(manifest_text: str) -> list[str]:
     return urls
 
 
+def parse_manifest_md5s(manifest_text: str) -> dict[str, str]:
+    """
+    Build a mapping of URL → expected MD5 from the manifest.
+
+    Each line: <size> <md5> <url>
+    """
+    md5s: dict[str, str] = {}
+    for line in manifest_text.strip().splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 3:
+            md5s[parts[-1]] = parts[1]
+    return md5s
+
+
 # --- ZIP Download & Sampling ---
 
-def download_and_sample(zip_url: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> list[dict[str, Any]]:
+def download_and_sample(
+    zip_url: str,
+    sample_size: int = DEFAULT_SAMPLE_SIZE,
+    expected_md5: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Download a GDELT .export.CSV.zip and parse first N records in-memory.
+
+    If *expected_md5* is provided the downloaded content is verified against it
+    (MD5 hashes are published in the GDELT master manifest). A mismatch raises
+    ValueError to prevent ingesting corrupt or tampered data.
 
     Returns list of event dicts matching the format from fetcher.load_gdelt_events().
     """
     logger.info(f"Downloading {zip_url}...")
     response = requests.get(zip_url, timeout=60)
     response.raise_for_status()
+
+    # Verify MD5 integrity when the manifest-supplied hash is available
+    if expected_md5:
+        actual_md5 = hashlib.md5(response.content).hexdigest()
+        if actual_md5 != expected_md5:
+            raise ValueError(
+                f"MD5 mismatch for {zip_url}: expected {expected_md5}, got {actual_md5}"
+            )
+        logger.debug(f"MD5 verified: {actual_md5}")
 
     # Open ZIP in-memory
     with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
@@ -244,6 +278,7 @@ def download_and_ingest(
     processed = load_processed()
     manifest = fetch_manifest()
     all_urls = parse_export_urls(manifest)
+    md5_index = parse_manifest_md5s(manifest)
 
     new_urls = [u for u in all_urls if u not in processed][:max_files]
 
@@ -256,7 +291,7 @@ def download_and_ingest(
     summaries = []
     for url in new_urls:
         try:
-            events = download_and_sample(url, sample_size)
+            events = download_and_sample(url, sample_size, expected_md5=md5_index.get(url))
             summary = run_pipeline(events, dry_run=dry_run)
             summary["source_url"] = url
             summary["events_sampled"] = len(events)

@@ -41,7 +41,7 @@ cp .env.example .env
 python -m gdelt_vector_stream.downloader
 
 # Ingest more data for better search results
-python -m gdelt_vector_stream.downloader --max-files 10 --sample-size 100
+python -m gdelt_vector_stream.downloader --max-files 10 --sample 100
 
 # Watch mode: poll every 15 minutes for new files
 python -m gdelt_vector_stream.downloader --watch
@@ -50,7 +50,7 @@ python -m gdelt_vector_stream.downloader --watch
 ### Semantic search
 
 ```bash
-python -m gdelt_vector_stream.query --text "renewable energy developments worldwide"
+python -m gdelt_vector_stream.query "renewable energy developments worldwide"
 ```
 
 ### RAG analyst
@@ -95,7 +95,7 @@ The digest searches 8 broad categories (conflict, diplomacy, protests, economy, 
 A FastAPI backend is available for building frontends:
 
 ```bash
-pip install fastapi uvicorn
+pip install -e ".[api]"
 uvicorn api.server:app --reload
 ```
 

@@ -4,7 +4,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from huggingface_hub import InferenceClient
 from pydantic import BaseModel
@@ -28,8 +28,8 @@ app = FastAPI(title="GDELT Vector Stream API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -115,7 +115,8 @@ def stats():
             "index_fullness": fullness,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}")
+        logger.error(f"Failed to get stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve index statistics")
 
 
 @app.get("/api/search")
@@ -125,12 +126,13 @@ def search(q: str = Query(..., min_length=1), top_k: int = Query(5, ge=1, le=20)
         results = semantic_search(query_text=q, top_k=top_k)
         return {"query": q, "top_k": top_k, "results": results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
+        logger.error(f"Search failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 @app.post("/api/ask")
 def ask(req: AskRequest):
-    """Ask a question — RAG answer grounded in GDELT events via Ollama."""
+    """Ask a question — RAG answer grounded in GDELT events via Hugging Face Inference API."""
     try:
         result = analyst_ask(question=req.question, top_k=req.top_k, model=req.model)
         return result
@@ -143,17 +145,14 @@ def ask(req: AskRequest):
             "message": str(e),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analyst failed: {e}")
+        logger.error(f"Analyst failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Analyst failed")
 
 
-@app.post("/api/ingest")
-def ingest(req: IngestRequest):
-    """Trigger GDELT data ingestion."""
+def _run_ingest(sample_size: int, max_files: int) -> None:
+    """Background worker that runs the GDELT ingestion pipeline."""
     try:
-        summaries = download_and_ingest(
-            sample_size=req.sample_size, max_files=req.max_files
-        )
-        return {"summaries": summaries, "files_processed": len(summaries)}
+        download_and_ingest(sample_size=sample_size, max_files=max_files)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
 

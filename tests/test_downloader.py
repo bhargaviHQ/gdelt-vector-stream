@@ -1,10 +1,7 @@
 """Tests for the GDELT downloader module."""
 
-import sys
 import tempfile
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from gdelt_vector_stream.downloader import (
     GDELT_COLUMNS,
