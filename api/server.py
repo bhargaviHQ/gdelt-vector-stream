@@ -10,6 +10,7 @@ from huggingface_hub import InferenceClient
 from pydantic import BaseModel
 
 from gdelt_vector_stream.analyst import ask as analyst_ask
+from gdelt_vector_stream.country_report import get_country_report
 from gdelt_vector_stream.downloader import download_and_ingest, load_processed
 from gdelt_vector_stream.ingestor import get_pinecone_index
 from gdelt_vector_stream.query import semantic_search
@@ -183,3 +184,28 @@ def get_trending_digest(
     except Exception:
         logger.exception("Trends digest failed")
         raise HTTPException(status_code=500, detail="Trends digest failed. Check server logs.")
+
+
+@app.get("/api/country-report")
+def country_report(
+    country: str = Query(..., min_length=1, description="Country name or code, e.g. 'Ukraine' or 'BR'"),
+    top_k: int = Query(5, ge=1, le=10),
+    model: str = Query(default=None),
+):
+    """Generate a Country Intelligence Report grounded in GDELT events."""
+    try:
+        result = get_country_report(country=country, top_k=top_k, model=model)
+        return result
+    except RuntimeError as e:
+        return {
+            "report": None,
+            "country": country,
+            "events": [],
+            "stats": {},
+            "model": model or HF_MODEL,
+            "error": "hf_error",
+            "message": str(e),
+        }
+    except Exception:
+        logger.exception("Country report failed")
+        raise HTTPException(status_code=500, detail="Country report failed. Check server logs.")
