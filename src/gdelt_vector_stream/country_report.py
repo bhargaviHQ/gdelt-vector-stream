@@ -276,7 +276,7 @@ if __name__ == "__main__":
 
     stats = result["stats"]
     print(f"\nStatistics:")
-    print(f"  Events analysed : {stats['event_count']}")
+    print(f"  Events analyzed : {stats['event_count']}")
     print(f"  Average tone    : {stats['avg_tone']:.2f}")
     print(f"  Total mentions  : {stats['total_mentions']}")
     if stats["top_actors"]:

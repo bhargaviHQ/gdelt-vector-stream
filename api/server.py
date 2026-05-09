@@ -197,6 +197,7 @@ def country_report(
         result = get_country_report(country=country, top_k=top_k, model=model)
         return result
     except RuntimeError as e:
+        logger.warning(f"Country report HF error for {country!r}: {e}")
         return {
             "report": None,
             "country": country,
@@ -204,7 +205,7 @@ def country_report(
             "stats": {},
             "model": model or HF_MODEL,
             "error": "hf_error",
-            "message": str(e),
+            "message": "LLM inference failed. Check that HF_TOKEN is set and the model is available.",
         }
     except Exception:
         logger.exception("Country report failed")
