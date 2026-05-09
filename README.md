@@ -69,8 +69,6 @@ python -m gdelt_vector_stream.analyst "Global trends in renewable energy adoptio
 
 ### Trending Topics Digest
 
-Automatically surface the top global news themes — no question needed:
-
 ```bash
 # Generate a World News Digest across 8 default topic categories
 python -m gdelt_vector_stream.trends
@@ -90,6 +88,26 @@ python -m gdelt_vector_stream.trends --model Qwen/Qwen2.5-7B-Instruct
 
 The digest searches 8 broad categories (conflict, diplomacy, protests, economy, environment, health, humanitarian, technology), deduplicates events across them, and asks the LLM for one paragraph per active topic.
 
+### Country Intelligence Report
+
+Generate a focused, LLM-backed intelligence briefing for any country or region — no manual query construction needed:
+
+```bash
+# Generate a report for Ukraine
+python -m gdelt_vector_stream.country_report Ukraine
+
+# Show the raw retrieved events alongside the report
+python -m gdelt_vector_stream.country_report France --show-events
+
+# Retrieve more events per search angle for a richer report
+python -m gdelt_vector_stream.country_report Brazil --top-k 8
+
+# Use a different model
+python -m gdelt_vector_stream.country_report Japan --model Qwen/Qwen2.5-7B-Instruct
+```
+
+The report searches five thematic angles (military conflict, diplomacy, economic policy, protests, humanitarian situation) for the specified country, deduplicates events across angles, computes tone/mention statistics, and asks the LLM to produce a structured briefing with an Executive Summary, Key Developments, Tone Assessment, Key Actors, and Sources sections.
+
 ### API server
 
 A FastAPI backend is available for building frontends:
@@ -108,6 +126,7 @@ Endpoints:
 | POST | `/api/ask` | RAG analyst (JSON body: `question`, `top_k`, `model`) |
 | POST | `/api/ingest` | Trigger ingestion (JSON body: `sample_size`, `max_files`) |
 | GET | `/api/trends?top_k=3` | World News Digest across default topic categories |
+| GET | `/api/country-report?country=Ukraine` | Country Intelligence Report for a specific country |
 
 ## Tech stack
 
@@ -143,6 +162,7 @@ src/gdelt_vector_stream/
   downloader.py    # Auto-download real GDELT data from master file list
   analyst.py       # RAG analyst: Pinecone retrieval + HF LLM
   trends.py        # Trending Topics Digest: multi-category world news briefing
+  country_report.py# Country Intelligence Report: focused briefing for a specific country
   main.py          # Pipeline orchestration (fetch -> embed -> ingest)
 api/
   server.py        # FastAPI backend
@@ -150,6 +170,7 @@ tests/
   test_pipeline.py # Unit tests for the core pipeline
   test_downloader.py
   test_trends.py   # Unit tests for the Trending Topics Digest
+  test_country_report.py # Unit tests for the Country Intelligence Report
 ```
 
 ## Testing
